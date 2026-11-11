@@ -21,3 +21,15 @@ name#姓名
 you#你
 your#你（们）的
 our#我们的
+my#我的
+pack#整理
+desk#桌子
+floor#地板
+blackboard#黑板
+school#学校
+bag#包
+schoolbag#书包
+pencil#铅笔
+pencilbox#铅笔盒
+book#书
+good#好

@@ -1,15 +1,17 @@
 import './style.css';
 import { answerCurrent, createRound } from './quiz.js';
 import { subjects } from './subjects.js';
+import { isValidMathAnswer } from './math.js';
 
 const app = document.querySelector('#app');
-const subject = subjects[0];
+let subject = null;
 let words = [];
 let warnings = [];
 let round;
 let questionIndex = 0;
 let screen = 'loading';
 let reviewMode = 'sample';
+let loadRequest = 0;
 
 function modeLabel() {
   return reviewMode === 'all' ? '全量复习' : '随机 10 词';
@@ -32,13 +34,147 @@ function button(text, className, onClick) {
 function shell() {
   app.replaceChildren();
   const header = element('header', 'header');
-  const brand = element('div', 'brand');
-  brand.append(element('span', 'brand-icon', 'Aa'), element('span', '', '词间'));
-  header.append(brand, element('span', 'subject-tag', `${subject.name} · 单词复习`));
+  const brand = button('', 'brand', renderHome);
+  brand.setAttribute('aria-label', '嘟嘟的学习乐园，返回首页');
+  brand.append(element('span', 'brand-icon', '嘟'), element('span', '', '嘟嘟的学习乐园'));
+  header.append(brand);
+  if (subject) header.append(button('← 乐园首页', 'secondary home-link', renderHome));
   const main = element('main', 'main');
-  const footer = element('footer', 'footer', '每天一点，让单词慢慢变熟悉。');
+  const footer = element('footer', 'footer', '每天进步一点点，快乐学习每一天。');
   app.append(header, main, footer);
   return main;
+}
+
+function renderHome() {
+  subject = null;
+  screen = 'home';
+  const main = shell();
+  main.append(element('p', 'eyebrow', '欢迎来到你的学习乐园'),
+    element('h1', '', '嘟嘟，今天想学什么？'),
+    element('p', 'intro', '选一门喜欢的科目，开始今天的小挑战吧！'));
+  const grid = element('div', 'subject-grid');
+  subjects.forEach(item => {
+    const card = element('section', `card subject-card subject-${item.id}`);
+    const planned = item.kind === 'coming-soon';
+    const action = button(planned ? '即将加入' : `开始学${item.name}  →`, 'primary', () => openSubject(item));
+    action.disabled = planned;
+    card.append(element('div', 'subject-icon', item.icon), element('h2', '', item.name),
+      element('p', 'intro', item.description), action);
+    grid.append(card);
+  });
+  main.append(grid);
+  window.scrollTo(0, 0);
+}
+
+function openSubject(item) {
+  subject = item;
+  if (item.kind === 'word-review') load();
+  else if (item.kind === 'worksheet') renderMath();
+}
+
+function renderMath() {
+  screen = 'math';
+  const mathSubject = subject;
+  const questions = mathSubject.createWorksheet();
+  const main = shell();
+  main.append(element('p', 'eyebrow', '数学 · 算一算'),
+    element('h1', '', '100以内加减法'),
+    element('p', 'intro', '一共10题，每题10分。填好所有答案，再一起交卷！'),
+    element('p', 'muted', '加法、减法各5题。刷新或离开练习会清空本轮答案。'));
+  const form = element('form', 'math-form');
+  form.noValidate = true;
+  const summary = element('section', 'math-summary');
+  const grid = element('div', 'math-grid');
+  const inputs = [];
+  const rows = [];
+  const feedbacks = [];
+  const progress = element('p', 'math-progress', '已填写 0 / 10 题');
+  progress.setAttribute('role', 'status');
+  questions.forEach((question, index) => {
+    const row = element('div', 'card math-row');
+    const label = element('label', 'math-expression');
+    label.htmlFor = `math-answer-${index}`;
+    label.append(element('span', 'math-number', `第${index + 1}题`),
+      element('span', '', `${question.left} ${question.operator} ${question.right} =`));
+    const input = element('input', 'math-input');
+    input.id = label.htmlFor;
+    input.name = `answer-${index}`;
+    input.type = 'text';
+    input.inputMode = 'numeric';
+    input.pattern = '[0-9]{1,3}';
+    input.maxLength = 3;
+    input.required = true;
+    input.autocomplete = 'off';
+    input.setAttribute('enterkeyhint', index === questions.length - 1 ? 'done' : 'next');
+    input.setAttribute('aria-describedby', `math-feedback-${index}`);
+    const feedback = element('p', 'math-feedback');
+    feedback.id = `math-feedback-${index}`;
+    input.addEventListener('input', () => {
+      input.removeAttribute('aria-invalid');
+      feedback.textContent = '';
+      const filled = inputs.filter(field => field.value !== '').length;
+      progress.textContent = `已填写 ${filled} / 10 题`;
+    });
+    input.addEventListener('keydown', event => {
+      if (event.key === 'Enter' && !input.readOnly) {
+        event.preventDefault();
+        if (index < inputs.length - 1) inputs[index + 1].focus();
+        else form.requestSubmit();
+      }
+    });
+    const equation = element('div', 'math-equation');
+    equation.append(label, input);
+    row.append(equation, feedback);
+    grid.append(row);
+    inputs.push(input);
+    rows.push(row);
+    feedbacks.push(feedback);
+  });
+  const error = element('p', 'form-error');
+  error.setAttribute('role', 'alert');
+  const submit = element('button', 'primary', '全部完成，提交答案');
+  submit.type = 'submit';
+  let submitted = false;
+  form.addEventListener('submit', event => {
+    event.preventDefault();
+    if (submitted) return;
+    const invalid = inputs.findIndex(input => !isValidMathAnswer(input.value));
+    if (invalid !== -1) {
+      error.textContent = `还有题目没有填好。第${invalid + 1}题请输入0～100的整数。`;
+      inputs.forEach((input, index) => {
+        if (!isValidMathAnswer(input.value)) {
+          input.setAttribute('aria-invalid', 'true');
+          feedbacks[index].textContent = '请填写0～100的整数';
+        }
+      });
+      inputs[invalid].focus();
+      return;
+    }
+    const result = mathSubject.gradeWorksheet(questions, inputs.map(input => input.value));
+    submitted = true;
+    error.textContent = '';
+    progress.textContent = '已交卷，来看看你的成绩吧！';
+    inputs.forEach((input, index) => {
+      input.readOnly = true;
+      input.removeAttribute('aria-invalid');
+      const correct = result.results[index].correct;
+      rows[index].classList.add(correct ? 'math-correct' : 'math-incorrect');
+      feedbacks[index].textContent = correct ? '✓ 答对了！' : `× 再记一次，正确答案是 ${questions[index].answer}`;
+    });
+    submit.remove();
+    summary.classList.add('card', 'result-card');
+    const heading = element('h2', '', '本轮成绩');
+    heading.tabIndex = -1;
+    summary.append(heading, element('p', 'score', `${result.score} 分`),
+      element('p', 'math-result-count', `答对 ${result.correctCount} / 10 题`),
+      element('p', '', result.correctCount === 10 ? '全部答对，真棒！' : '往下看看错题，下次一定更熟练！'),
+      button('再来一轮  ↻', 'primary', renderMath),
+      button('返回乐园首页', 'secondary', renderHome));
+    heading.focus();
+  });
+  form.append(summary, progress, grid, error, submit);
+  main.append(form);
+  window.scrollTo(0, 0);
 }
 
 function warningPanel(main) {
@@ -57,12 +193,13 @@ function start(mode) {
   questionIndex = 0;
   screen = 'quiz';
   renderQuestion();
+  window.scrollTo(0, 0);
 }
 
 function renderWelcome() {
   screen = 'welcome';
   const main = shell();
-  main.append(element('p', 'eyebrow', 'A LITTLE PRACTICE, EVERY DAY'),
+  main.append(element('p', 'eyebrow', '英语 · 单词复习'),
     element('h1', '', '给单词一点熟悉感'),
     element('p', 'intro', '看一看，补一补。用一小轮练习，唤醒你的单词记忆。'));
   const card = element('section', 'card welcome-card');
@@ -82,6 +219,7 @@ function renderWelcome() {
   card.append(steps, modes);
   main.append(card);
   warningPanel(main);
+  window.scrollTo(0, 0);
 }
 
 function renderQuestion() {
@@ -99,10 +237,21 @@ function renderQuestion() {
   const card = element('section', 'card question-card');
   const prompt = element('div', 'prompt');
   const spelling = element('h1', 'word', question.masked);
-  spelling.setAttribute('aria-label', `缺字单词：${question.masked.split('').join(' ')}`);
+  if (result) {
+    spelling.replaceChildren();
+    [...question.masked].forEach((letter, index) => {
+      const blankIndex = question.blanks.indexOf(index);
+      spelling.append(blankIndex === -1
+        ? document.createTextNode(letter)
+        : element('span', 'filled-letter', result.selected[blankIndex]));
+    });
+  }
+  spelling.setAttribute('aria-label', `${result ? '所选拼写' : '缺字单词'}：${spelling.textContent.split('').join(' ')}`);
   prompt.append(spelling, element('span', 'meaning', question.word.chinese));
   card.append(element('p', 'question-label', '选择正确的字母组合'), prompt,
-    element('p', 'hint', `缺少 ${question.blanks.length} 个字母，请按从左到右的顺序补入`));
+    element('p', 'hint', result
+      ? '蓝色字母为你选择的补全，请查看下方答案'
+      : `缺少 ${question.blanks.length} 个字母，请按从左到右的顺序补入`));
   const options = element('div', 'options');
   question.options.forEach((option, index) => {
     const choice = button('', 'option', () => selectAnswer(option));
@@ -150,6 +299,7 @@ function advance() {
   else {
     questionIndex++;
     renderQuestion();
+    window.scrollTo(0, 0);
   }
 }
 
@@ -175,19 +325,24 @@ function renderResults() {
     card.append(list);
   } else card.append(element('p', 'perfect', '全部答对！今天的单词掌握得很棒。'));
   card.append(button('再来一轮  ↻', 'primary', () => start(reviewMode)),
-    button('返回首页', 'secondary', renderWelcome));
+    button('返回英语', 'secondary', renderWelcome));
   main.append(card);
   main.querySelector('h1').tabIndex = -1;
   main.querySelector('h1').focus({ preventScroll: true });
 }
 
 async function load() {
+  const englishSubject = subject;
+  const request = ++loadRequest;
   screen = 'loading';
   shell().append(element('p', 'intro', '正在打开你的单词本……'));
   try {
-    ({ words, warnings } = await subject.load());
+    const data = await englishSubject.load();
+    if (request !== loadRequest || subject !== englishSubject || screen !== 'loading') return;
+    ({ words, warnings } = data);
     renderWelcome();
   } catch (error) {
+    if (request !== loadRequest || subject !== englishSubject || screen !== 'loading') return;
     screen = 'error';
     const main = shell();
     const panel = element('section', 'card error-panel');
@@ -212,4 +367,4 @@ document.addEventListener('keydown', event => {
   }
 });
 
-load();
+renderHome();
