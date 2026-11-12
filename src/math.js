@@ -1,25 +1,46 @@
 import { shuffle } from './quiz.js';
 
+export const mathModes = [
+  {
+    id: 'arithmetic', name: '加减法', title: '99以内加减法',
+    description: '数字1～99，答案16～99，加减各5题。',
+  },
+  {
+    id: 'multiplication-division', name: '乘除法', title: '九九乘除法',
+    description: '九九乘法范围，乘除各5题，除法无余数。',
+  },
+];
+
 const additionPool = [];
 const subtractionPool = [];
-for (let left = 0; left <= 100; left++) {
-  for (let right = 0; right <= 100; right++) {
+const multiplicationPool = [];
+const divisionPool = [];
+for (let left = 1; left <= 99; left++) {
+  for (let right = 1; right <= 99; right++) {
     const sum = left + right;
-    if (left <= right && sum > 15 && sum <= 100) {
+    if (left <= right && sum > 15 && sum <= 99) {
       additionPool.push({ left, right, operator: '+', answer: sum });
     }
     const difference = left - right;
-    if (difference > 15 && difference <= 100) {
+    if (difference > 15 && difference <= 99) {
       subtractionPool.push({ left, right, operator: '−', answer: difference });
     }
   }
 }
+for (let left = 1; left <= 9; left++) {
+  for (let right = 1; right <= 9; right++) {
+    if (left <= right) {
+      multiplicationPool.push({ left, right, operator: '×', answer: left * right });
+    }
+    divisionPool.push({ left: left * right, right, operator: '÷', answer: left });
+  }
+}
 
-export function createMathWorksheet(random = Math.random) {
-  return shuffle([
-    ...shuffle(additionPool, random).slice(0, 5),
-    ...shuffle(subtractionPool, random).slice(0, 5),
-  ], random).map(question => ({ ...question }));
+export function createMathWorksheet(random = Math.random, mode = 'arithmetic') {
+  if (!mathModes.some(item => item.id === mode)) throw new Error('无效的数学练习类型');
+  const pools = mode === 'arithmetic' ? [additionPool, subtractionPool] : [multiplicationPool, divisionPool];
+  return shuffle(pools.flatMap(pool => shuffle(pool, random).slice(0, 5)), random)
+    .map(question => ({ ...question }));
 }
 
 export function isValidMathAnswer(value) {

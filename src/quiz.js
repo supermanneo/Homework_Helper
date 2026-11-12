@@ -1,5 +1,11 @@
 const ALPHABET = 'abcdefghijklmnopqrstuvwxyz';
 
+export const englishDifficulties = [
+  { id: 'easy', name: '简单', description: '少量缺字 · 中文提示 · 四选一' },
+  { id: 'hard', name: '困难', description: '约三分之二缺字 · 中文提示 · 四选一' },
+  { id: 'challenge', name: '挑战', description: '看中文释义 · 自己输入完整单词' },
+];
+
 export function parseWordbook(text) {
   const words = [];
   const warnings = [];
@@ -37,16 +43,22 @@ export function shuffle(items, random = Math.random) {
   return result;
 }
 
-export function sampleWords(words, random = Math.random) {
-  return shuffle(words, random).slice(0, 10);
-}
-
-export function createQuestion(word, random = Math.random) {
+export function createQuestion(word, random = Math.random, difficulty = 'easy') {
+  if (!englishDifficulties.some(item => item.id === difficulty)) throw new Error('无效的复习难度');
   const indices = [...word.english].flatMap((letter, index) => /[a-z]/i.test(letter) ? [index] : []);
   if (indices.length < 2) throw new Error('题目至少需要两个英文字母');
+  if (difficulty === 'challenge') {
+    return {
+      kind: 'challenge', word, blanks: indices,
+      masked: [...word.english].map((letter, index) => indices.includes(index) ? '_' : letter).join(''),
+      answer: word.english, options: [],
+    };
+  }
   // 短词最多缺一个，中等长度最多缺两个，长词最多缺三个。
   const limit = indices.length < 5 ? 1 : indices.length < 8 ? 2 : 3;
-  const count = 1 + Math.floor(random() * limit);
+  const count = difficulty === 'hard'
+    ? Math.min(indices.length - 1, Math.ceil(indices.length * 2 / 3))
+    : 1 + Math.floor(random() * limit);
   const blanks = shuffle(indices, random).slice(0, count).sort((a, b) => a - b);
   const answer = blanks.map(index => word.english[index]).join('');
   const options = new Set([answer]);
@@ -58,6 +70,7 @@ export function createQuestion(word, random = Math.random) {
     if (options.size === 4) break;
   }
   return {
+    kind: 'choice',
     word,
     blanks,
     masked: [...word.english].map((letter, index) => blanks.includes(index) ? '_' : letter).join(''),
@@ -66,19 +79,25 @@ export function createQuestion(word, random = Math.random) {
   };
 }
 
-export function createRound(words, makeQuestion = createQuestion, random = Math.random, mode = 'sample') {
-  if (mode !== 'sample' && mode !== 'all') throw new Error('无效的复习模式');
-  const selected = mode === 'all' ? shuffle(words, random) : sampleWords(words, random);
+export function createRound(words, makeQuestion = createQuestion, random = Math.random, difficulty = 'easy') {
+  if (!englishDifficulties.some(item => item.id === difficulty)) throw new Error('无效的复习难度');
   return {
-    questions: selected.map(word => makeQuestion(word, random)),
+    questions: shuffle(words, random).map(word => makeQuestion(word, random, difficulty)),
     answers: [],
   };
 }
 
 export function submitAnswer(round, option) {
   const question = round.questions[round.answers.length];
-  if (!question || !question.options.includes(option)) throw new Error('无效的作答');
-  round.answers.push({ selected: option, correct: option === question.answer });
+  if (!question) throw new Error('无效的作答');
+  if (question.kind === 'challenge') {
+    if (typeof option !== 'string' || !option.trim()) throw new Error('请先输入完整的英文单词');
+    const selected = option.trim();
+    round.answers.push({ selected, correct: selected.toLowerCase() === question.answer.toLowerCase() });
+  } else {
+    if (!question.options.includes(option)) throw new Error('无效的作答');
+    round.answers.push({ selected: option, correct: option === question.answer });
+  }
 }
 
 export function answerCurrent(round, questionIndex, option) {

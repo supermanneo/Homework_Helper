@@ -11,10 +11,11 @@ import { createMathWorksheet, gradeMathWorksheet } from './math.js';
  * @property {string} icon
  * @typedef {Subject & {kind: 'word-review', load: () => Promise<ReturnType<typeof parseWordbook>>, createQuestion: typeof createQuestion}} EnglishSubject
  * @typedef {Subject & {kind: 'worksheet', createWorksheet: typeof createMathWorksheet, gradeWorksheet: typeof gradeMathWorksheet}} MathSubject
+ * @typedef {Subject & {kind: 'pinyin-reading'}} ChineseSubject
  * @typedef {Subject & {kind: 'coming-soon'}} PlannedSubject
  */
 
-/** @type {(EnglishSubject | MathSubject | PlannedSubject)[]} */
+/** @type {(EnglishSubject | MathSubject | ChineseSubject | PlannedSubject)[]} */
 export const subjects = [{
   id: 'english',
   name: '英语',
@@ -34,7 +35,7 @@ export const subjects = [{
 }, {
   id: 'math',
   name: '数学',
-  description: '100以内加减法，一起动动小脑筋。',
+  description: '加减法、九九乘除法，一起动动小脑筋。',
   icon: '1+2',
   kind: 'worksheet',
   createWorksheet: createMathWorksheet,
@@ -42,7 +43,7 @@ export const subjects = [{
 }, {
   id: 'chinese',
   name: '语文',
-  description: '汉字和故事的世界，等你来探索。',
+  description: '读一读声母、韵母和整体认读音节。',
   icon: '字',
-  kind: 'coming-soon',
+  kind: 'pinyin-reading',
 }];
